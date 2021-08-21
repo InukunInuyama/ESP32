@@ -19,9 +19,18 @@
 #define CAMERA_MODEL_AI_THINKER // Has PSRAM
 //#define CAMERA_MODEL_TTGO_T_JOURNAL // No PSRAM
 
-#define MAX_SERVO_WIDTH 28
-#define MID_SERVO_WIDTH 20
-#define MIN_SERVO_WIDTH 12
+//8bit
+//#define MAX_SERVO_WIDTH 28
+//#define MID_SERVO_WIDTH 20
+//#define MIN_SERVO_WIDTH 12
+
+//10bit
+#define MAX_SERVO_WIDTH 85
+#define MID_SERVO_WIDTH 70
+#define MIN_SERVO_WIDTH 55
+
+#define MAX_ACCEL_WIDTH 1024
+#define MIN_ACCEL_WIDTH 0
 
 #define N 3
 
@@ -33,9 +42,11 @@ const char pass[] = "mypass12345";
 const IPAddress ip(192,168,0,12);
 const IPAddress server_ip(192, 168, 0, 13);
 const IPAddress subnet(255,255,255,0);
-const int port = 11411; 
+const int port1 = 11411; 
+const int port2 = 11412; 
 
-WiFiClient client;
+WiFiClient client1;
+WiFiClient client2;
 
 void startCameraServer();
 
@@ -141,8 +152,9 @@ void setup() {
 
   // Connect port
   Serial.print("Local port: ");
-  Serial.println(port);
-  client.connect(server_ip, port);
+  Serial.println(port1);
+  client1.connect(server_ip, port1);
+  client2.connect(server_ip, port2);
 
   
   Serial.println("ESP32 SoftAP Mode start.");
@@ -158,21 +170,30 @@ void setup() {
 
   // PWM /////////////////////////
   // Assign pin
-  //const int ledPin = A10; 
-  const int servoPin = A12; 
-  
-  //pwm setup ledcSetup(channel, frequency, resolution);  resolution->(8bit = 256division）
+  //const int ledPin     = A10; 
+  //const int drivePin   = A10; 
+  const int servoPin   = A12; 
+  const int forwardPin = A16;
+  const int backPin    = A13;
+    
+  //pwm setup ledcSetup(channel, frequency, resolution);  resolution->(8bit = 256division, 10bit = 1024division）
+  //ledcSetup(15,50,10); 
   //ledcSetup(15,12800,8); 
-  ledcSetup(14,50,8); 
+  ledcSetup(14,50,10); 
+  //ledcSetup(14,50,8);
+  ledcSetup(13,50,10); 
+  ledcSetup(12,50,10); 
   
   //attach pin to channel(pin, channel)
   //ledcAttachPin(ledPin,15);
+  //ledcAttachPin(drivePin,15);
   ledcAttachPin(servoPin,14);
-
+  ledcAttachPin(forwardPin,13);
+  ledcAttachPin(backPin,12);
 }
 
 void loop() {
-  int val;
+  int val_a, val_s;
 
   // put your main code here, to run repeatedly:
   //ledcWrite(15,255);
@@ -186,20 +207,34 @@ void loop() {
   //delay(1000);
   
   //Serial.printf("pass0\n");
-  if (client.available()) {
-    String line = client.readStringUntil('\n');
+  if(client1.available()) {
+    String line = client1.readStringUntil('\n');
+    val_s = atoi(line.c_str());
     //Serial.println(line);
-
-    //Serial.printf("pass2\n");
-    val = atoi(line.c_str());
+    Serial.printf("val_s=%d ",val_s);
+    if      ( val_s > MAX_SERVO_WIDTH) val_s = MAX_SERVO_WIDTH;
+    else if ( val_s < MIN_SERVO_WIDTH) val_s = MIN_SERVO_WIDTH;
+    Serial.printf("servo_val=%d",val_s);
+    ledcWrite(14,val_s);  
+  }
+  if(client2.available()) {
+    Serial.printf("pass2\n");
+    String line = client2.readStringUntil('\n');
+    val_a = atoi(line.c_str());
     //Serial.printf("pass3\n");
+    Serial.printf("val_a=%d ",val_a);
+    if(val_a >= 0){
+      if (val_a > MAX_ACCEL_WIDTH)val_a = MAX_ACCEL_WIDTH;
+      ledcWrite(13,val_a);
+      ledcWrite(12,0);
+    }
+    else{
+      if (val_a < -MAX_ACCEL_WIDTH)val_a = -MAX_ACCEL_WIDTH;
+      ledcWrite(13,0);
+      ledcWrite(12,-val_a);
+    }
+    Serial.printf("accel_val=%d\n",val_a);
   }
 
-  if(val<31&&val>0){
-    Serial.printf("val=%d ",val);
-    if      ( val > MAX_SERVO_WIDTH) val = MAX_SERVO_WIDTH;
-    else if ( val < MIN_SERVO_WIDTH) val = MIN_SERVO_WIDTH;
-    Serial.printf("servo_val=%d\n",val);
-    ledcWrite(14,val);
-  }
+  
 }
